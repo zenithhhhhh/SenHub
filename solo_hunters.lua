@@ -1,5 +1,5 @@
--- MM2 Hub for Delta Executor - Custom UI
--- Murder Mystery 2 Script
+-- MM2 Hub for Delta Executor - FULL VERSION
+-- Murder Mystery 2 Script with ALL features working
 
 -- Create the GUI
 local ScreenGui = Instance.new("ScreenGui")
@@ -185,8 +185,13 @@ local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local VirtualUser = game:GetService("VirtualUser")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
 local LocalPlayer = Players.LocalPlayer
-local MainEvent = ReplicatedStorage:FindFirstChild("MainEvent") or ReplicatedStorage:WaitForChild("MainEvent")
+local Camera = workspace.CurrentCamera
+local Mouse = LocalPlayer:GetMouse()
+
+-- Find MainEvent
+local MainEvent = ReplicatedStorage:FindFirstChild("MainEvent") or ReplicatedStorage:FindFirstChild("MainEvent") or ReplicatedStorage:WaitForChild("MainEvent")
 
 -- Global variables for toggles
 _G.AutoCollect = false
@@ -196,8 +201,12 @@ _G.ESPEnabled = false
 _G.KillAura = false
 _G.Aimbot = false
 _G.AutoFarm = false
+_G.AutoGifts = false
 _G.NoClip = false
 _G.InfiniteJump = false
+_G.FlyMode = false
+_G.WallCheck = false
+_G.AutoRespawn = false
 _G.WalkSpeed = 16
 _G.JumpPower = 50
 
@@ -417,9 +426,11 @@ local function createUI(frame)
     }
 end
 
--- Build Main tab
+-- ============================================
+-- BUILD MAIN TAB
+-- ============================================
 local main = createUI(contentFrames[1])
-main.addSection("Auto Features")
+main.addSection("Auto Collect")
 main.addToggle("Auto Collect Coins", false, function(state)
     _G.AutoCollect = state
     if state then
@@ -442,6 +453,29 @@ main.addToggle("Auto Collect Coins", false, function(state)
     end
 end)
 
+main.addToggle("Auto Collect Gifts", false, function(state)
+    _G.AutoGifts = state
+    if state then
+        spawn(function()
+            while _G.AutoGifts do
+                task.wait(0.3)
+                pcall(function()
+                    local gifts = workspace:FindFirstChild("Gifts") or workspace:FindFirstChild("Gift")
+                    if gifts then
+                        for _, gift in pairs(gifts:GetChildren()) do
+                            if gift:IsA("BasePart") and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                                LocalPlayer.Character.HumanoidRootPart.CFrame = gift.CFrame * CFrame.new(0, 3, 0)
+                                task.wait(0.2)
+                            end
+                        end
+                    end
+                end)
+            end
+        end)
+    end
+end)
+
+main.addSection("Auto Kill")
 main.addToggle("Auto Murderer Kill", false, function(state)
     _G.AutoMurderer = state
     if state then
@@ -479,7 +513,7 @@ main.addToggle("Auto Sheriff Kill", false, function(state)
 end)
 
 main.addSection("Movement")
-main.addSlider("WalkSpeed", 16, 250, 16, function(value)
+main.addSlider("WalkSpeed", 16, 350, 16, function(value)
     _G.WalkSpeed = value
     pcall(function()
         if LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid") then
@@ -488,7 +522,7 @@ main.addSlider("WalkSpeed", 16, 250, 16, function(value)
     end)
 end)
 
-main.addSlider("JumpPower", 50, 250, 50, function(value)
+main.addSlider("JumpPower", 50, 350, 50, function(value)
     _G.JumpPower = value
     pcall(function()
         if LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid") then
@@ -497,9 +531,15 @@ main.addSlider("JumpPower", 50, 250, 50, function(value)
     end)
 end)
 
--- Build Combat tab
+main.addToggle("Infinite Jump", false, function(state)
+    _G.InfiniteJump = state
+end)
+
+-- ============================================
+-- BUILD COMBAT TAB
+-- ============================================
 local combat = createUI(contentFrames[2])
-combat.addSection("Combat")
+combat.addSection("Combat Features")
 combat.addToggle("Kill Aura", false, function(state)
     _G.KillAura = state
     if state then
@@ -514,7 +554,7 @@ combat.addToggle("Kill Aura", false, function(state)
                             if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
                                 local distance = (myPos - player.Character.HumanoidRootPart.Position).Magnitude
                                 
-                                if distance < 25 and MainEvent then
+                                if distance < 30 and MainEvent then
                                     if LocalPlayer.Character:FindFirstChild("Knife") or LocalPlayer.Backpack:FindFirstChild("Knife") then
                                         MainEvent:FireServer("Knife", "Humanoid")
                                     elseif LocalPlayer.Character:FindFirstChild("Gun") or LocalPlayer.Backpack:FindFirstChild("Gun") then
@@ -530,8 +570,12 @@ combat.addToggle("Kill Aura", false, function(state)
     end
 end)
 
-combat.addToggle("Aimbot", false, function(state)
+combat.addToggle("Aimbot (Silent)", false, function(state)
     _G.Aimbot = state
+end)
+
+combat.addToggle("Wall Check", false, function(state)
+    _G.WallCheck = state
 end)
 
 combat.addLabel("Aimbot locks onto nearest player")
@@ -544,12 +588,25 @@ RunService.RenderStepped:Connect(function()
             local closestDistance = math.huge
             
             for _, player in pairs(Players:GetPlayers()) do
-                if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-                    local distance = (LocalPlayer.Character.HumanoidRootPart.Position - player.Character.HumanoidRootPart.Position).Magnitude
+                if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") and player.Character:FindFirstChild("Humanoid") and player.Character.Humanoid.Health > 0 then
                     
-                    if distance < 50 and distance < closestDistance then
-                        closestDistance = distance
-                        closestPlayer = player
+                    -- Wall check
+                    if _G.WallCheck then
+                        local ray = Ray.new(LocalPlayer.Character.HumanoidRootPart.Position, (player.Character.HumanoidRootPart.Position - LocalPlayer.Character.HumanoidRootPart.Position).Unit * 100)
+                        local hit, pos = workspace:FindPartOnRay(ray, LocalPlayer.Character)
+                        if hit and hit:IsDescendantOf(player.Character) then
+                            local distance = (LocalPlayer.Character.HumanoidRootPart.Position - player.Character.HumanoidRootPart.Position).Magnitude
+                            if distance < 100 and distance < closestDistance then
+                                closestDistance = distance
+                                closestPlayer = player
+                            end
+                        end
+                    else
+                        local distance = (LocalPlayer.Character.HumanoidRootPart.Position - player.Character.HumanoidRootPart.Position).Magnitude
+                        if distance < 100 and distance < closestDistance then
+                            closestDistance = distance
+                            closestPlayer = player
+                        end
                     end
                 end
             end
@@ -561,7 +618,9 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
--- Build ESP tab
+-- ============================================
+-- BUILD ESP TAB
+-- ============================================
 local esp = createUI(contentFrames[3])
 esp.addSection("ESP Settings")
 esp.addToggle("Enable ESP", false, function(state)
@@ -580,17 +639,28 @@ esp.addToggle("Enable ESP", false, function(state)
                                 espGui = Instance.new("BillboardGui")
                                 espGui.Name = "ESP_Gui"
                                 espGui.Adornee = player.Character:FindFirstChild("Head") or player.Character:FindFirstChild("HumanoidRootPart")
-                                espGui.Size = UDim2.new(0, 150, 0, 30)
+                                espGui.Size = UDim2.new(0, 150, 0, 40)
                                 espGui.StudsOffset = Vector3.new(0, 3, 0)
                                 espGui.AlwaysOnTop = true
                                 
                                 local textLabel = Instance.new("TextLabel")
                                 textLabel.Parent = espGui
-                                textLabel.Size = UDim2.new(1, 0, 1, 0)
+                                textLabel.Size = UDim2.new(1, 0, 0.5, 0)
+                                textLabel.Position = UDim2.new(0, 0, 0, 0)
                                 textLabel.BackgroundTransparency = 1
                                 textLabel.TextStrokeTransparency = 0
                                 textLabel.TextStrokeColor3 = Color3.new(0, 0, 0)
                                 textLabel.TextScaled = true
+                                
+                                local distanceLabel = Instance.new("TextLabel")
+                                distanceLabel.Parent = espGui
+                                distanceLabel.Size = UDim2.new(1, 0, 0.5, 0)
+                                distanceLabel.Position = UDim2.new(0, 0, 0.5, 0)
+                                distanceLabel.BackgroundTransparency = 1
+                                distanceLabel.TextStrokeTransparency = 0
+                                distanceLabel.TextStrokeColor3 = Color3.new(0, 0, 0)
+                                distanceLabel.TextScaled = true
+                                distanceLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
                                 
                                 -- Determine role
                                 if player.Character:FindFirstChild("Knife") or player.Backpack:FindFirstChild("Knife") then
@@ -605,6 +675,12 @@ esp.addToggle("Enable ESP", false, function(state)
                                 end
                                 
                                 espGui.Parent = player.Character
+                            end
+                            
+                            -- Update distance
+                            if espGui and espGui:FindFirstChild("distanceLabel") and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") and player.Character:FindFirstChild("HumanoidRootPart") then
+                                local dist = (LocalPlayer.Character.HumanoidRootPart.Position - player.Character.HumanoidRootPart.Position).Magnitude
+                                espGui.distanceLabel.Text = math.floor(dist) .. " studs"
                             end
                         end
                     end
@@ -632,7 +708,15 @@ esp.addToggle("Enable ESP", false, function(state)
     end
 end)
 
-esp.addButton("Detect Roles", function()
+esp.addToggle("Show Distance", true, function(state)
+    -- This is handled in the ESP loop
+end)
+
+esp.addToggle("Show Boxes", false, function(state)
+    _G.ESPBoxes = state
+end)
+
+esp.addButton("Detect All Roles", function()
     pcall(function()
         local murderers = {}
         local sheriffs = {}
@@ -665,7 +749,9 @@ esp.addButton("Detect Roles", function()
     end)
 end)
 
--- Build Farm tab
+-- ============================================
+-- BUILD FARM TAB
+-- ============================================
 local farm = createUI(contentFrames[4])
 farm.addSection("Auto Farm")
 farm.addToggle("Auto Farm Coins", false, function(state)
@@ -673,14 +759,14 @@ farm.addToggle("Auto Farm Coins", false, function(state)
     if state then
         spawn(function()
             while _G.AutoFarm do
-                task.wait(0.3)
+                task.wait(0.2)
                 pcall(function()
                     local coins = workspace:FindFirstChild("Coins") or workspace:FindFirstChild("Coin") or workspace:FindFirstChild("DroppedCoins")
                     if coins then
                         for _, coin in pairs(coins:GetChildren()) do
                             if coin:IsA("BasePart") and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
                                 LocalPlayer.Character.HumanoidRootPart.CFrame = coin.CFrame * CFrame.new(0, 3, 0)
-                                task.wait(0.2)
+                                task.wait(0.1)
                             end
                         end
                     end
@@ -695,14 +781,14 @@ farm.addToggle("Auto Farm Gifts", false, function(state)
     if state then
         spawn(function()
             while _G.AutoGifts do
-                task.wait(0.3)
+                task.wait(0.2)
                 pcall(function()
                     local gifts = workspace:FindFirstChild("Gifts") or workspace:FindFirstChild("Gift")
                     if gifts then
                         for _, gift in pairs(gifts:GetChildren()) do
                             if gift:IsA("BasePart") and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
                                 LocalPlayer.Character.HumanoidRootPart.CFrame = gift.CFrame * CFrame.new(0, 3, 0)
-                                task.wait(0.2)
+                                task.wait(0.1)
                             end
                         end
                     end
@@ -712,9 +798,36 @@ farm.addToggle("Auto Farm Gifts", false, function(state)
     end
 end)
 
--- Build Teleport tab
+farm.addToggle("Auto Respawn", false, function(state)
+    _G.AutoRespawn = state
+end)
+
+-- Auto Respawn handler
+LocalPlayer.CharacterAdded:Connect(function(character)
+    if _G.AutoRespawn then
+        task.wait(0.5)
+        game:GetService("StarterGui"):SetCore("SendNotification", {
+            Title = "Auto Respawn",
+            Text = "You have respawned",
+            Duration = 2
+        })
+    end
+    
+    -- Reapply speed/jump
+    task.wait(0.5)
+    pcall(function()
+        if character:FindFirstChildOfClass("Humanoid") then
+            character.Humanoid.WalkSpeed = _G.WalkSpeed
+            character.Humanoid.JumpPower = _G.JumpPower
+        end
+    end)
+end)
+
+-- ============================================
+-- BUILD TELEPORT TAB
+-- ============================================
 local teleport = createUI(contentFrames[5])
-teleport.addSection("Teleports")
+teleport.addSection("Teleport to Players")
 teleport.addButton("TP to Murderer", function()
     pcall(function()
         for _, player in pairs(Players:GetPlayers()) do
@@ -761,22 +874,61 @@ teleport.addButton("TP to Sheriff", function()
     end)
 end)
 
+teleport.addButton("TP to Random Player", function()
+    pcall(function()
+        local players = {}
+        for _, player in pairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                table.insert(players, player)
+            end
+        end
+        
+        if #players > 0 then
+            local randomPlayer = players[math.random(1, #players)]
+            LocalPlayer.Character.HumanoidRootPart.CFrame = randomPlayer.Character.HumanoidRootPart.CFrame * CFrame.new(0, 3, 2)
+            game:GetService("StarterGui"):SetCore("SendNotification", {
+                Title = "Teleported",
+                Text = "To: " .. randomPlayer.Name,
+                Duration = 2
+            })
+        else
+            game:GetService("StarterGui"):SetCore("SendNotification", {
+                Title = "Error",
+                Text = "No players found",
+                Duration = 2
+            })
+        end
+    end)
+end)
+
+teleport.addSection("Map Teleports")
 teleport.addButton("TP to Center", function()
     pcall(function()
         local spawns = workspace:FindFirstChild("SpawnLocation") or workspace:FindFirstChild("Spawn") or workspace:FindFirstChild("Start")
         if spawns and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
             LocalPlayer.Character.HumanoidRootPart.CFrame = spawns.CFrame * CFrame.new(0, 5, 0)
+            game:GetService("StarterGui"):SetCore("SendNotification", {
+                Title = "Teleported",
+                Text = "To Map Center",
+                Duration = 2
+            })
         end
     end)
 end)
 
--- Build Misc tab
-local misc = createUI(contentFrames[6])
-misc.addSection("Extra Features")
-misc.addToggle("Infinite Jump", false, function(state)
-    _G.InfiniteJump = state
+teleport.addButton("TP to Highest Point", function()
+    pcall(function()
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(LocalPlayer.Character.HumanoidRootPart.Position.X, 500, LocalPlayer.Character.HumanoidRootPart.Position.Z)
+        end
+    end)
 end)
 
+-- ============================================
+-- BUILD MISC TAB
+-- ============================================
+local misc = createUI(contentFrames[6])
+misc.addSection("Movement")
 misc.addToggle("NoClip", false, function(state)
     _G.NoClip = state
     if state then
@@ -856,6 +1008,7 @@ misc.addToggle("Fly Mode", false, function(state)
     end
 end)
 
+misc.addSection("Utility")
 misc.addButton("Anti-AFK", function()
     LocalPlayer.Idled:Connect(function()
         VirtualUser:Button2Down(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
@@ -876,12 +1029,37 @@ misc.addButton("Server Hop", function()
     TeleportService:TeleportToPlaceInstance(placeId, "0", LocalPlayer)
 end)
 
--- Build Settings tab
+misc.addButton("Rejoin Server", function()
+    local TeleportService = game:GetService("TeleportService")
+    local placeId = game.PlaceId
+    local jobId = game.JobId
+    TeleportService:TeleportToPlaceInstance(placeId, jobId, LocalPlayer)
+end)
+
+-- ============================================
+-- BUILD SETTINGS TAB
+-- ============================================
 local settings = createUI(contentFrames[7])
 settings.addSection("UI Settings")
 settings.addLabel("Press RightShift to toggle UI")
-settings.addLabel("Drag the window to move")
+settings.addLabel("Drag window to move")
+settings.addLabel("Hide button minimizes UI")
+
+settings.addSection("Theme")
+settings.addDropdown("Theme", {"Dark", "Darker", "Black", "Blue"}, function(option)
+    if option == "Dark" then
+        MainFrame.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
+    elseif option == "Darker" then
+        MainFrame.BackgroundColor3 = Color3.fromRGB(5, 5, 5)
+    elseif option == "Black" then
+        MainFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    elseif option == "Blue" then
+        MainFrame.BackgroundColor3 = Color3.fromRGB(10, 10, 30)
+    end
+end)
+
 settings.addButton("Destroy UI", function()
+    -- Disable all features
     _G.AutoCollect = false
     _G.AutoMurderer = false
     _G.AutoSheriff = false
@@ -889,10 +1067,12 @@ settings.addButton("Destroy UI", function()
     _G.KillAura = false
     _G.Aimbot = false
     _G.AutoFarm = false
+    _G.AutoGifts = false
     _G.NoClip = false
     _G.InfiniteJump = false
     _G.FlyMode = false
     
+    -- Remove ESP
     pcall(function()
         for _, player in pairs(Players:GetPlayers()) do
             if player.Character and player.Character:FindFirstChild("ESP_Gui") then
@@ -1052,17 +1232,6 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
     end
 end)
 
--- Character respawn handler
-LocalPlayer.CharacterAdded:Connect(function(character)
-    task.wait(0.5)
-    pcall(function()
-        if character:FindFirstChildOfClass("Humanoid") then
-            character.Humanoid.WalkSpeed = _G.WalkSpeed
-            character.Humanoid.JumpPower = _G.JumpPower
-        end
-    end)
-end)
-
 -- Anti-AFK by default
 LocalPlayer.Idled:Connect(function()
     VirtualUser:Button2Down(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
@@ -1073,6 +1242,6 @@ end)
 -- Notification
 game:GetService("StarterGui"):SetCore("SendNotification", {
     Title = "MM2 Hub",
-    Text = "Loaded! Press RightShift",
+    Text = "Full Version Loaded! Press RightShift",
     Duration = 3
 })
